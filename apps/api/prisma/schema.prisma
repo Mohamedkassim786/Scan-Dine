@@ -1,0 +1,313 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Users (Admin, Chef, Staff) ──────────────────────────────────
+model User {
+  id           String      @id @default(uuid())
+  email        String      @unique
+  passwordHash String
+  name         String
+  role         String      @default("chef") // "admin" | "chef" | "staff"
+  phone        String      @default("")
+  avatarUrl    String      @default("")
+  permissions  String      @default("[]") // JSON string of granted permission keys
+  isActive     Boolean     @default(true)
+  restaurantId String?
+  restaurant   Restaurant? @relation(fields: [restaurantId], references: [id])
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  auditLogs AuditLog[]
+}
+
+// ─── Restaurant ──────────────────────────────────────────────────
+model Restaurant {
+  id                      String   @id @default(uuid())
+  name                    String
+  slug                    String   @unique
+  cuisine                 String   @default("")
+  description             String   @default("")
+  logoUrl                 String   @default("")
+  coverUrl                String   @default("")
+  address                 String   @default("")
+  phone                   String   @default("")
+  email                   String   @default("")
+  currency                String   @default("₹")
+  taxPercentage           Float    @default(5.0)
+  serviceChargePercentage Float    @default(0.0)
+  isOpen                  Boolean  @default(true)
+  isTemporarilyClosed     Boolean  @default(false)
+  temporaryClosureReason  String   @default("")
+  openTime                String   @default("11:00")
+  closeTime               String   @default("23:30")
+  weeklySchedule          String   @default("{\"mon\":\"11:00-23:30\",\"tue\":\"11:00-23:30\",\"wed\":\"11:00-23:30\",\"thu\":\"11:00-23:30\",\"fri\":\"11:00-00:00\",\"sat\":\"11:00-00:00\",\"sun\":\"11:00-23:00\"}")
+  isActive                Boolean  @default(true)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  tables          RestaurantTable[]
+  categories      Category[]
+  menuItems       MenuItem[]
+  orders          Order[]
+  payments        Payment[]
+  users           User[]
+  sessions        CustomerSession[]
+  notifications   Notification[]
+  auditLogs       AuditLog[]
+  analyticsEvents AnalyticsEvent[]
+}
+
+// ─── Tables ──────────────────────────────────────────────────────
+model RestaurantTable {
+  id           String     @id @default(uuid())
+  tableNumber  Int
+  capacity     Int        @default(4)
+  status       String     @default("available") // "available" | "occupied" | "ordering" | "payment_pending" | "cleaning" | "disabled"
+  qrToken      String     @unique @default(uuid())
+  qrCodeUrl    String     @default("")
+  isActive     Boolean    @default(true)
+  isDeleted    Boolean    @default(false)
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  orders   Order[]
+  sessions CustomerSession[]
+  carts    Cart[]
+
+  @@unique([restaurantId, tableNumber])
+}
+
+// ─── Customer Session (Anonymous) ────────────────────────────────
+model CustomerSession {
+  id           String          @id @default(uuid())
+  sessionToken String          @unique @default(uuid())
+  restaurantId String
+  tableId      String
+  restaurant   Restaurant      @relation(fields: [restaurantId], references: [id])
+  table        RestaurantTable @relation(fields: [tableId], references: [id])
+  isActive     Boolean         @default(true)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  orders Order[]
+  cart   Cart?
+}
+
+// ─── Categories ──────────────────────────────────────────────────
+model Category {
+  id           String     @id @default(uuid())
+  name         String
+  description  String     @default("")
+  displayOrder Int        @default(0)
+  isActive     Boolean    @default(true)
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  menuItems MenuItem[]
+
+  @@unique([restaurantId, name])
+}
+
+// ─── Menu Items ──────────────────────────────────────────────────
+model MenuItem {
+  id           String     @id @default(uuid())
+  name         String
+  description  String     @default("")
+  price        Float
+  imageUrl     String     @default("")
+  spiceLevel   String     @default("mild") // "none" | "mild" | "medium" | "hot" | "extra-hot"
+  prepTime     Int        @default(15) // minutes
+  calories     Int        @default(0)
+  dietaryType  String     @default("non-veg") // "veg" | "non-veg" | "vegan" | "egg"
+  isAvailable  Boolean    @default(true)
+  isPopular    Boolean    @default(false)
+  isChefPick   Boolean    @default(false)
+  isFeatured   Boolean    @default(false)
+  ingredients  String     @default("") // comma-separated
+  allergens    String     @default("") // comma-separated: "dairy,gluten,nuts"
+  nutrition    String     @default("") // JSON string: {"protein":"22g","carbs":"74g","fat":"28g"}
+  categoryId   String
+  category     Category   @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  cartItems   CartItem[]
+  orderItems  OrderItem[]
+  addonGroups AddonGroup[]
+}
+
+// ─── Add-on Groups & Customizations ──────────────────────────────
+model AddonGroup {
+  id             String        @id @default(uuid())
+  name           String // e.g. "Portion Size", "Extra Toppings", "Sauces"
+  description    String        @default("")
+  minSelections  Int           @default(0) // 0 = optional, 1+ = required
+  maxSelections  Int           @default(1)
+  isRequired     Boolean       @default(false)
+  displayOrder   Int           @default(0)
+  menuItemId     String
+  menuItem       MenuItem      @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  options        AddonOption[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+}
+
+model AddonOption {
+  id           String     @id @default(uuid())
+  name         String // e.g. "Large", "Extra Truffle", "Garlic Butter"
+  price        Float      @default(0.0)
+  isAvailable  Boolean    @default(true)
+  displayOrder Int        @default(0)
+  addonGroupId String
+  addonGroup   AddonGroup @relation(fields: [addonGroupId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+// ─── Cart (Session-based) ────────────────────────────────────────
+model Cart {
+  id        String          @id @default(uuid())
+  sessionId String          @unique
+  session   CustomerSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  tableId   String
+  table     RestaurantTable @relation(fields: [tableId], references: [id])
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  items CartItem[]
+}
+
+model CartItem {
+  id                  String   @id @default(uuid())
+  quantity            Int      @default(1)
+  specialInstructions String   @default("")
+  cartId              String
+  cart                Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  menuItemId          String
+  menuItem            MenuItem @relation(fields: [menuItemId], references: [id])
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([cartId, menuItemId])
+}
+
+// ─── Orders ──────────────────────────────────────────────────────
+model Order {
+  id                  String             @id @default(uuid())
+  orderNumber         String             @unique
+  status              String             @default("new") // "new" | "accepted" | "preparing" | "ready" | "served" | "cancelled"
+  paymentMethod       String             @default("cash") // "cash" | "online"
+  paymentStatus       String             @default("pending") // "pending" | "processing" | "paid" | "failed" | "refunded"
+  subtotalAmount      Float              @default(0)
+  taxAmount           Float              @default(0)
+  serviceChargeAmount Float              @default(0)
+  totalAmount         Float              @default(0)
+  specialInstructions String             @default("")
+  chefAssignedId      String?
+  restaurantId        String
+  restaurant          Restaurant         @relation(fields: [restaurantId], references: [id])
+  tableId             String
+  table               RestaurantTable    @relation(fields: [tableId], references: [id])
+  sessionId           String
+  session             CustomerSession    @relation(fields: [sessionId], references: [id])
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  items         OrderItem[]
+  statusHistory OrderStatusHistory[]
+  payments      Payment[]
+}
+
+model OrderItem {
+  id                  String   @id @default(uuid())
+  quantity            Int      @default(1)
+  priceAtOrder        Float
+  specialInstructions String   @default("")
+  selectedAddons      String   @default("") // JSON or text summary of selected modifiers
+  orderId             String
+  order               Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItemId          String
+  menuItem            MenuItem @relation(fields: [menuItemId], references: [id])
+  createdAt           DateTime @default(now())
+}
+
+model OrderStatusHistory {
+  id        String   @id @default(uuid())
+  status    String
+  note      String   @default("")
+  changedBy String   @default("") // user name or id
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+// ─── Payments ────────────────────────────────────────────────────
+model Payment {
+  id            String     @id @default(uuid())
+  amount        Float
+  method        String // "cash" | "online"
+  status        String     @default("pending") // "pending" | "processing" | "paid" | "failed" | "refunded"
+  provider      String     @default("direct_simulator") // "cash" | "razorpay" | "upi" | "stripe" | "direct_simulator"
+  transactionId String     @default("")
+  notes         String     @default("")
+  paidAt        DateTime?
+  orderId       String
+  order         Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  restaurantId  String
+  restaurant    Restaurant @relation(fields: [restaurantId], references: [id])
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+}
+
+// ─── Admin Notifications ─────────────────────────────────────────
+model Notification {
+  id           String     @id @default(uuid())
+  type         String // "new_order" | "payment_pending" | "payment_completed" | "failed_payment" | "item_unavailable" | "table_activity" | "chef_activity" | "system_alert"
+  title        String
+  message      String
+  isRead       Boolean    @default(false)
+  metadata     String     @default("{}") // JSON details (orderId, tableId, etc.)
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+}
+
+// ─── Audit Logging ───────────────────────────────────────────────
+model AuditLog {
+  id           String     @id @default(uuid())
+  action       String // e.g. "FOOD_CREATED", "FOOD_EDITED", "PRICE_CHANGED", "TABLE_STATUS_CHANGED", "PAYMENT_MARKED_PAID", "QR_REGENERATED", "CHEF_CREATED"
+  entity       String // "MenuItem", "RestaurantTable", "Order", "Payment", "User", "Restaurant"
+  entityId     String     @default("")
+  details      String     @default("") // Human readable description
+  metadata     String     @default("{}") // JSON diff or context
+  ipAddress    String     @default("127.0.0.1")
+  userId       String?
+  user         User?      @relation(fields: [userId], references: [id])
+  userName     String     @default("System")
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+}
+
+// ─── Anonymous Session-Level Analytics ───────────────────────────
+model AnalyticsEvent {
+  id           String     @id @default(uuid())
+  eventType    String // "menu_visit" | "food_view" | "search" | "cart_add" | "order_placed" | "ai_interaction"
+  sessionId    String     @default("")
+  metadata     String     @default("{}") // JSON string: { menuItemId, query, categoryId, amount }
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+}
