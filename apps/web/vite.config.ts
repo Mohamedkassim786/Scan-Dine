@@ -19,6 +19,13 @@ export default defineConfig({
       '/socket.io': {
         target: 'http://127.0.0.1:3001',
         ws: true,
+        changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on('error', (err: any) => {
+            if (err.code === 'ECONNRESET' || err.code === 'ECONNABORTED' || err.code === 'EPIPE') return;
+            console.error('Proxy error:', err);
+          });
+        },
       },
     },
   },
