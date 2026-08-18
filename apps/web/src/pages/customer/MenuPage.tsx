@@ -8,6 +8,7 @@ import { CustomerBottomNav } from '../../components/customer/CustomerBottomNav';
 import { FoodCard } from '../../components/customer/FoodCard';
 import { DishDetailModal } from '../../components/customer/DishDetailModal';
 import { Category, MenuItem, Order } from '../../types';
+import { formatImageUrl } from '../../utils/image';
 
 export const MenuPage: React.FC = () => {
   const { slug, token } = useParams<{ slug: string; token: string }>();
@@ -45,17 +46,30 @@ export const MenuPage: React.FC = () => {
       fetchSessionOrders();
     };
 
+    const handleAvailabilityChanged = (data: { menuItemId: string; isAvailable: boolean; menuItem?: MenuItem }) => {
+      setMenuItems((prev) =>
+        prev.map((item) =>
+          item.id === data.menuItemId ? { ...item, isAvailable: data.isAvailable } : item
+        )
+      );
+      if (selectedDish?.id === data.menuItemId) {
+        setSelectedDish((prev) => (prev ? { ...prev, isAvailable: data.isAvailable } : null));
+      }
+    };
+
     socket.on('order-status-update', handleUpdate);
     socket.on('new-order', handleUpdate);
+    socket.on('menu-availability-changed', handleAvailabilityChanged);
 
     const interval = setInterval(fetchSessionOrders, 4000);
 
     return () => {
       socket.off('order-status-update', handleUpdate);
       socket.off('new-order', handleUpdate);
+      socket.off('menu-availability-changed', handleAvailabilityChanged);
       clearInterval(interval);
     };
-  }, [token, session?.token]);
+  }, [token, session?.token, selectedDish?.id]);
 
   const fetchMenuData = async () => {
     setIsLoading(true);
@@ -210,9 +224,12 @@ export const MenuPage: React.FC = () => {
             >
               <div className="relative w-full aspect-[16/9] sm:aspect-[21/9] bg-[#121414] overflow-hidden">
                 <img
-                  src={chefsPick.imageUrl}
+                  src={formatImageUrl(chefsPick.imageUrl)}
                   alt={chefsPick.name}
                   className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                  onError={(e: any) => {
+                    e.target.src = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=600&q=80';
+                  }}
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#1f2020] via-[#1f2020]/40 to-transparent" />
                 <div className="absolute top-3 left-3 px-3 py-1 rounded-full bg-[#edbf7b] text-[#442b00] text-[11px] font-bold uppercase tracking-wider shadow-lg flex items-center gap-1">

@@ -6,6 +6,7 @@ import { useCustomerStore } from '../../store/useCustomerStore';
 import { CustomerHeader } from '../../components/customer/CustomerHeader';
 import { CustomerBottomNav } from '../../components/customer/CustomerBottomNav';
 import { DigitalReceipt } from '../../components/common/DigitalReceipt';
+import { FinishDiningModal } from '../../components/customer/FinishDiningModal';
 import { Order } from '../../types';
 
 export const CustomerOrdersPage: React.FC = () => {
@@ -15,6 +16,7 @@ export const CustomerOrdersPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [activeReceiptOrder, setActiveReceiptOrder] = useState<any | null>(null);
   const [isLoadingConsolidated, setIsLoadingConsolidated] = useState(false);
+  const [isFinishModalOpen, setIsFinishModalOpen] = useState(false);
 
   const baseRoute = `/r/${slug}/t/${token}`;
 
@@ -129,20 +131,30 @@ export const CustomerOrdersPage: React.FC = () => {
               </span>
             </div>
 
-            <button
-              onClick={handleOpenConsolidatedBill}
-              disabled={isLoadingConsolidated}
-              className="w-full h-11 rounded-xl bg-[#edbf7b] hover:bg-[#ffddb0] text-[#442b00] font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-lg active:scale-98"
-            >
-              {isLoadingConsolidated ? (
-                <span className="material-symbols-outlined text-[16px] animate-spin">sync</span>
-              ) : (
-                <>
-                  <span className="material-symbols-outlined text-[18px]">download</span>
-                  <span>View & Download Complete Single Bill (PNG)</span>
-                </>
-              )}
-            </button>
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                onClick={() => setIsFinishModalOpen(true)}
+                className="h-11 rounded-xl bg-[#edbf7b] hover:bg-[#ffddb0] text-[#442b00] font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all shadow-lg active:scale-98"
+              >
+                <span className="material-symbols-outlined text-[18px]">flag</span>
+                <span>Finish Dining</span>
+              </button>
+
+              <button
+                onClick={handleOpenConsolidatedBill}
+                disabled={isLoadingConsolidated}
+                className="h-11 rounded-xl bg-[#121414] hover:bg-[#2e2f2f] text-[#edbf7b] border border-[#edbf7b]/40 font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all"
+              >
+                {isLoadingConsolidated ? (
+                  <span className="material-symbols-outlined text-[16px] animate-spin">sync</span>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-[18px]">download</span>
+                    <span>Preview Bill</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         )}
 
@@ -277,6 +289,12 @@ export const CustomerOrdersPage: React.FC = () => {
           isAdmin={false}
         />
       )}
+
+      {/* Finish Dining Modal */}
+      <FinishDiningModal
+        isOpen={isFinishModalOpen}
+        onClose={() => setIsFinishModalOpen(false)}
+      />
 
       <CustomerBottomNav />
     </div>

@@ -95,12 +95,19 @@ router.patch('/:id/status', authenticate, requireAdmin, async (req: AuthRequest,
       include: { order: true },
     });
 
-    // Sync order payment status
+    // Sync order payment status & close session if paid
     if (payment.orderId) {
       await prisma.order.update({
         where: { id: payment.orderId },
         data: { paymentStatus: status },
       });
+
+      if (status === 'paid' && payment.order?.sessionId) {
+        await prisma.customerSession.update({
+          where: { id: payment.order.sessionId },
+          data: { isActive: false, status: 'closed' },
+        });
+      }
     }
 
     if (req.user?.restaurantId) {
@@ -113,6 +120,22 @@ router.patch('/:id/status', authenticate, requireAdmin, async (req: AuthRequest,
         userName: req.user.name,
         restaurantId: req.user.restaurantId,
       });
+    }
+
+    // Emit Socket.IO events for real-time customer update
+    const io = req.app.get('io');
+    if (io) {
+      if (payment.orderId && payment.order) {
+        io.to(`order-${payment.orderId}`).emit('payment-updated', { paymentId: payment.id, status, orderId: payment.orderId, sessionId: payment.order.sessionId });
+        if (payment.order.sessionId) {
+          io.to(`session-${payment.order.sessionId}`).emit('payment-updated', { paymentId: payment.id, status, orderId: payment.orderId, sessionId: payment.order.sessionId });
+        }
+        io.to(`order-${payment.orderId}`).emit('order-status-update', { orderId: payment.orderId, status: payment.order.status, order: payment.order });
+      }
+      const rId = req.user?.restaurantId || payment.restaurantId;
+      if (rId) {
+        io.to(`restaurant-${rId}`).emit('payment-updated', { paymentId: payment.id, status });
+      }
     }
 
     return res.json(payment);

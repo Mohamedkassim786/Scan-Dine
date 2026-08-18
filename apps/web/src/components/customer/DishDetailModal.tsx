@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { MenuItem } from '../../types';
 import { useCustomerStore } from '../../store/useCustomerStore';
+import { formatImageUrl } from '../../utils/image';
 
 interface DishDetailModalProps {
   item: MenuItem | null;
@@ -57,9 +58,9 @@ export const DishDetailModal: React.FC<DishDetailModalProps> = ({ item, onClose 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-      <div className="relative w-full max-w-lg bg-[#121414] rounded-t-2xl sm:rounded-2xl border border-[#4f4539]/30 overflow-hidden shadow-2xl max-h-[92vh] flex flex-col">
-        {/* Header Close Button */}
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/85 backdrop-blur-md animate-fade-in">
+      <div className="relative w-full max-w-lg max-h-[90vh] bg-[#121414] rounded-3xl border border-[#4f4539]/30 shadow-2xl overflow-hidden flex flex-col text-[#e3e2e2]">
+        {/* Close Button */}
         <button
           onClick={onClose}
           className="absolute top-4 right-4 z-20 w-9 h-9 rounded-full bg-[#121414]/80 text-[#e3e2e2] hover:text-[#edbf7b] flex items-center justify-center backdrop-blur-md border border-[#4f4539]/30"
@@ -71,7 +72,14 @@ export const DishDetailModal: React.FC<DishDetailModalProps> = ({ item, onClose 
         <div className="overflow-y-auto hide-scrollbar pb-28">
           {/* Dish Hero Image */}
           <div className="relative w-full h-64 sm:h-72 bg-[#1f2020]">
-            <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
+            <img
+              src={formatImageUrl(item.imageUrl)}
+              alt={item.name}
+              className="w-full h-full object-cover"
+              onError={(e: any) => {
+                e.target.src = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=600&q=80';
+              }}
+            />
             <div className="absolute inset-0 bg-gradient-to-t from-[#121414] via-transparent to-transparent" />
 
             {item.isChefPick && (
@@ -207,14 +215,16 @@ export const DishDetailModal: React.FC<DishDetailModalProps> = ({ item, onClose 
           <div className="flex items-center bg-[#1f2020] rounded-full border border-[#4f4539]/40 h-12 px-1">
             <button
               onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-              className="w-8 h-8 rounded-full flex items-center justify-center text-[#d2c4b4] hover:text-[#e3e2e2]"
+              disabled={item.isAvailable === false}
+              className="w-8 h-8 rounded-full flex items-center justify-center text-[#d2c4b4] hover:text-[#e3e2e2] disabled:opacity-30"
             >
               <span className="material-symbols-outlined text-[18px]">remove</span>
             </button>
             <span className="w-8 text-center font-bold text-sm text-[#e3e2e2]">{quantity}</span>
             <button
               onClick={() => setQuantity((q) => Math.min(10, q + 1))}
-              className="w-8 h-8 rounded-full flex items-center justify-center text-[#d2c4b4] hover:text-[#e3e2e2]"
+              disabled={item.isAvailable === false}
+              className="w-8 h-8 rounded-full flex items-center justify-center text-[#d2c4b4] hover:text-[#e3e2e2] disabled:opacity-30"
             >
               <span className="material-symbols-outlined text-[18px]">add</span>
             </button>
@@ -223,14 +233,21 @@ export const DishDetailModal: React.FC<DishDetailModalProps> = ({ item, onClose 
           {/* Add to Order CTA */}
           <button
             onClick={handleAddToCart}
-            disabled={isAdded}
+            disabled={isAdded || item.isAvailable === false}
             className={`flex-1 h-12 rounded-full font-semibold text-xs uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-2 shadow-lg ${
-              isAdded
+              item.isAvailable === false
+                ? 'bg-rose-950/80 text-rose-300 border border-rose-500/50 cursor-not-allowed'
+                : isAdded
                 ? 'bg-emerald-600 text-white'
                 : 'bg-[#edbf7b] hover:bg-[#ffddb0] text-[#442b00] active:scale-98'
             }`}
           >
-            {isAdded ? (
+            {item.isAvailable === false ? (
+              <>
+                <span className="material-symbols-outlined text-[18px]">block</span>
+                <span>Currently Unavailable</span>
+              </>
+            ) : isAdded ? (
               <>
                 <span className="material-symbols-outlined text-[18px]">check_circle</span>
                 <span>Added to Order</span>

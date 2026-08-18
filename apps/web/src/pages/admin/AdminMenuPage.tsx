@@ -3,6 +3,7 @@ import api from '../../services/api';
 import { AdminSidebar } from '../../components/admin/AdminSidebar';
 import { AdminHeader } from '../../components/admin/AdminHeader';
 import { Category, MenuItem } from '../../types';
+import { formatImageUrl } from '../../utils/image';
 
 export const AdminMenuPage: React.FC = () => {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -28,6 +29,8 @@ export const AdminMenuPage: React.FC = () => {
   const [isFeatured, setIsFeatured] = useState(false);
 
   // Image Upload state
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string>('');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -52,33 +55,14 @@ export const AdminMenuPage: React.FC = () => {
     }
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setIsUploading(true);
-    setUploadProgress('Uploading to server...');
-
-    try {
-      const formData = new FormData();
-      formData.append('image', file);
-
-      const res = await api.post('/upload/single', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-
-      if (res.data.url) {
-        // Automatically set the image URL
-        setImageUrl(res.data.url);
-        setUploadProgress('Uploaded successfully ✓');
-        setTimeout(() => setUploadProgress(''), 2500);
-      }
-    } catch (err: any) {
-      console.error('File upload failed:', err);
-      setUploadProgress(err.response?.data?.error || 'Upload failed');
-    } finally {
-      setIsUploading(false);
-    }
+    setSelectedFile(file);
+    const localUrl = URL.createObjectURL(file);
+    setPreviewUrl(localUrl);
+    setUploadProgress('New photo selected (will upload on save) ✓');
   };
 
   const handleOpenAdd = () => {
@@ -87,6 +71,8 @@ export const AdminMenuPage: React.FC = () => {
     setDescription('');
     setPrice('420.00');
     setImageUrl('https://images.unsplash.com/photo-1551183053-bf91a1d81141?auto=format&fit=crop&w=800&q=80');
+    setSelectedFile(null);
+    setPreviewUrl('');
     setDietaryType('non-veg');
     setSpiceLevel('mild');
     setPrepTime('15');
@@ -106,6 +92,8 @@ export const AdminMenuPage: React.FC = () => {
     setDescription(item.description);
     setPrice(item.price.toString());
     setImageUrl(item.imageUrl);
+    setSelectedFile(null);
+    setPreviewUrl('');
     setCategoryId(item.categoryId);
     setDietaryType(item.dietaryType);
     setSpiceLevel(item.spiceLevel);
@@ -131,12 +119,30 @@ export const AdminMenuPage: React.FC = () => {
 
   const handleSaveItem = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsUploading(true);
     try {
+      let finalImageUrl = imageUrl;
+
+      // Upload selected image file ONLY when Save button is clicked
+      if (selectedFile) {
+        setUploadProgress('Uploading photo to server...');
+        const formData = new FormData();
+        formData.append('image', selectedFile);
+
+        const uploadRes = await api.post('/upload/single', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+
+        if (uploadRes.data.url) {
+          finalImageUrl = uploadRes.data.url;
+        }
+      }
+
       const payload = {
         name,
         description,
         price: parseFloat(price),
-        imageUrl,
+        imageUrl: finalImageUrl,
         categoryId: categoryId || categories[0]?.id,
         dietaryType,
         spiceLevel,
@@ -155,10 +161,17 @@ export const AdminMenuPage: React.FC = () => {
         await api.post('/menu', payload);
       }
 
+      setSelectedFile(null);
+      setPreviewUrl('');
       setIsModalOpen(false);
       fetchData();
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.error('Save menu item failed:', err);
+      const errMsg = err.response?.data?.error || err.message || 'Failed to save menu item';
+      setUploadProgress(`Error: ${errMsg}`);
+      alert(`Error saving menu item: ${errMsg}`);
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -253,7 +266,14 @@ export const AdminMenuPage: React.FC = () => {
                     <tr key={item.id} className="hover:bg-[#121414]/40 transition-colors">
                       <td className="p-4">
                         <div className="flex items-center gap-3">
-                          <img src={item.imageUrl} alt={item.name} className="w-12 h-12 rounded-lg object-cover bg-[#121414]" />
+                          <img
+                            src={formatImageUrl(item.imageUrl)}
+                            alt={item.name}
+                            className="w-12 h-12 rounded-lg object-cover bg-[#121414]"
+                            onError={(e: any) => {
+                              e.target.src = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=600&q=80';
+                            }}
+                          />
                           <div>
                             <p className="font-serif-heading font-semibold text-sm text-[#e3e2e2]">{item.name}</p>
                             <p className="text-[11px] text-[#d2c4b4]/60 truncate max-w-xs">{item.description}</p>
@@ -414,43 +434,55 @@ export const AdminMenuPage: React.FC = () => {
 
                 <div className="flex items-center gap-3">
                   {/* Thumbnail Preview */}
-                  <div className="w-16 h-16 rounded-xl bg-[#1f2020] border border-[#4f4539]/40 overflow-hidden shrink-0 flex items-center justify-center">
-                    {imageUrl ? (
-                      <img src={imageUrl} alt="Preview" className="w-full h-full object-cover" />
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-16 h-16 rounded-xl bg-[#1f2020] border border-[#edbf7b]/40 overflow-hidden shrink-0 flex items-center justify-center cursor-pointer hover:opacity-90 relative group"
+                    title="Click to Upload / Change Photo"
+                  >
+                    {previewUrl || imageUrl ? (
+                      <img
+                        src={previewUrl ? previewUrl : formatImageUrl(imageUrl)}
+                        alt="Preview"
+                        className="w-full h-full object-cover"
+                        onError={(e: any) => {
+                          e.target.src = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=600&q=80';
+                        }}
+                      />
                     ) : (
-                      <span className="material-symbols-outlined text-[#4f4539] text-[24px]">image</span>
+                      <span className="material-symbols-outlined text-[#edbf7b] text-[24px]">photo_camera</span>
                     )}
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-bold">
+                      Change
+                    </div>
                   </div>
 
                   {/* Upload Controls */}
-                  <div className="flex-1 space-y-1.5">
+                  <div className="flex-1 space-y-2">
                     <input
                       type="file"
                       ref={fileInputRef}
-                      onChange={handleFileUpload}
+                      onChange={handleFileSelect}
                       accept="image/png, image/jpeg, image/jpg, image/webp"
                       className="hidden"
                     />
 
-                    <div className="flex gap-2">
+                    <div className="flex items-center gap-2">
                       <button
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
                         disabled={isUploading}
-                        className="px-3 py-1.5 rounded-xl bg-[#edbf7b] hover:bg-[#ffddb0] text-[#442b00] font-bold text-xs uppercase tracking-wider flex items-center gap-1 shadow-md transition-all"
+                        className="px-4 py-2 rounded-xl bg-[#edbf7b] hover:bg-[#ffddb0] text-[#442b00] font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-md transition-all active:scale-95"
                       >
-                        <span className="material-symbols-outlined text-[16px]">upload</span>
+                        <span className="material-symbols-outlined text-[18px]">upload</span>
                         <span>{isUploading ? 'Uploading...' : 'Upload Photo'}</span>
                       </button>
-                    </div>
 
-                    <input
-                      type="url"
-                      value={imageUrl}
-                      onChange={(e) => setImageUrl(e.target.value)}
-                      placeholder="Or paste external image URL (https://...)"
-                      className="w-full h-8 bg-[#1f2020] rounded-lg px-2.5 text-[11px] text-[#e3e2e2] border border-[#4f4539]/30 focus:outline-none focus:border-[#edbf7b]"
-                    />
+                      {imageUrl && (
+                        <span className="text-[10px] font-mono text-emerald-400 font-semibold bg-emerald-950/60 px-2 py-1 rounded border border-emerald-500/30">
+                          ✓ Photo Set
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

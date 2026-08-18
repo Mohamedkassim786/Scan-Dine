@@ -2,16 +2,44 @@ import React, { useEffect, useState } from 'react';
 import api from '../../services/api';
 import { AdminSidebar } from '../../components/admin/AdminSidebar';
 import { AdminHeader } from '../../components/admin/AdminHeader';
+import { getSocket } from '../../services/socket';
+import { useAuthStore } from '../../store/useAuthStore';
 
 export const AdminQRCodesPage: React.FC = () => {
+  const { user } = useAuthStore();
   const [tables, setTables] = useState<any[]>([]);
   const [selectedQR, setSelectedQR] = useState<any | null>(null);
   const [isPrintMode, setIsPrintMode] = useState(false);
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
+  const [showESP32Sim, setShowESP32Sim] = useState(true);
 
   useEffect(() => {
     fetchTables();
-  }, []);
+
+    const socket = getSocket();
+    if (user?.restaurantId) {
+      socket.emit('join-admin', user.restaurantId);
+    }
+
+    const handleUpdate = () => {
+      fetchTables();
+    };
+
+    socket.on('session-closed', handleUpdate);
+    socket.on('table-updated', handleUpdate);
+    socket.on('qr-updated', handleUpdate);
+    socket.on('cash-pass-created', handleUpdate);
+
+    const interval = setInterval(fetchTables, 3000);
+
+    return () => {
+      socket.off('session-closed', handleUpdate);
+      socket.off('table-updated', handleUpdate);
+      socket.off('qr-updated', handleUpdate);
+      socket.off('cash-pass-created', handleUpdate);
+      clearInterval(interval);
+    };
+  }, [user]);
 
   const fetchTables = async () => {
     try {
@@ -58,20 +86,32 @@ export const AdminQRCodesPage: React.FC = () => {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#4f4539]/20 pb-4">
             <div>
               <h1 className="font-serif-heading text-2xl sm:text-3xl font-bold text-[#e3e2e2]">
-                Table QR Codes Hub
+                Table QR Codes & ESP32 Hub
               </h1>
               <p className="text-xs text-[#d2c4b4]/60 mt-0.5">
-                Generate, download high-res vectors, regenerate tokens, and print luxury table tent cards
+                Live ESP32 Table Display Simulator, dynamic token management, and high-res vector downloads
               </p>
             </div>
 
             <div className="flex items-center gap-3">
               <button
+                onClick={() => setShowESP32Sim(!showESP32Sim)}
+                className={`px-3.5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider flex items-center gap-2 border transition-all ${
+                  showESP32Sim
+                    ? 'bg-cyan-950/80 border-cyan-500/50 text-cyan-300 shadow-md'
+                    : 'bg-[#1f2020] border-[#4f4539]/40 text-[#d2c4b4]'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[18px]">developer_board</span>
+                <span>ESP32 Mode: {showESP32Sim ? 'Simulated' : 'Raw QR'}</span>
+              </button>
+
+              <button
                 onClick={handlePrintAll}
                 className="px-4 py-2.5 rounded-xl bg-[#edbf7b] hover:bg-[#ffddb0] text-[#442b00] font-bold text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg transition-all"
               >
                 <span className="material-symbols-outlined text-[18px]">print</span>
-                <span>Print All Table Stands</span>
+                <span>Print All Stand Cards</span>
               </button>
             </div>
           </div>
@@ -81,6 +121,7 @@ export const AdminQRCodesPage: React.FC = () => {
             {tables.map((table) => {
               const baseUrl = 'http://192.168.1.4:5173';
               const targetUrl = `${baseUrl}/r/aurelian/t/${table.qrToken}`;
+              const isOccupied = table.orders && table.orders.length > 0 && table.orders.some((o: any) => o.status !== 'delivered' && o.status !== 'cancelled');
 
               return (
                 <div
@@ -100,32 +141,76 @@ export const AdminQRCodesPage: React.FC = () => {
 
                     <span
                       className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                        table.isActive
+                        isOccupied
+                          ? 'bg-amber-950/60 text-amber-300 border border-amber-500/30 animate-pulse'
+                          : table.isActive
                           ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-500/30'
                           : 'bg-rose-950/60 text-rose-300 border border-rose-500/30'
                       }`}
                     >
-                      {table.isActive ? 'Active' : 'Disabled'}
+                      {isOccupied ? 'Occupied' : table.isActive ? 'Available' : 'Disabled'}
                     </span>
                   </div>
 
-                  {/* QR Image Box */}
-                  <div
-                    onClick={() => setSelectedQR(table)}
-                    className="p-4 bg-white rounded-xl flex items-center justify-center cursor-pointer shadow-md group-hover:scale-102 transition-transform relative"
-                  >
-                    {table.qrCodeUrl ? (
-                      <img src={table.qrCodeUrl} alt={`Table ${table.tableNumber} QR`} className="w-40 h-40 object-contain" />
-                    ) : (
-                      <div className="w-40 h-40 flex items-center justify-center text-neutral-400 text-xs">
-                        No QR Generated
+                  {/* ESP32 Hardware Screen Simulator / Raw QR View */}
+                  {showESP32Sim ? (
+                    <div className="p-3 bg-[#0d0e0e] rounded-xl border border-cyan-500/30 shadow-inner space-y-2 relative overflow-hidden">
+                      <div className="flex items-center justify-between border-b border-cyan-900/40 pb-1.5">
+                        <span className="text-[9px] font-mono font-bold text-cyan-400 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
+                          ESP32 DISPLAY
+                        </span>
+                        <span className="text-[9px] font-mono text-cyan-400/60">Wi-Fi OK</span>
                       </div>
-                    )}
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 rounded-xl flex items-center justify-center transition-opacity text-white font-bold text-xs gap-1">
-                      <span className="material-symbols-outlined text-[20px]">zoom_in</span>
-                      <span>Enlarge</span>
+
+                      {isOccupied ? (
+                        <div className="py-6 px-2 text-center space-y-2 bg-[#121414] rounded-lg border border-amber-500/30">
+                          <span className="material-symbols-outlined text-amber-400 text-[28px] animate-bounce">
+                            lock
+                          </span>
+                          <p className="text-[11px] font-bold text-amber-300 uppercase tracking-wider">
+                            QR Hidden — Dining Active
+                          </p>
+                          <p className="text-[9px] text-[#d2c4b4]/60">
+                            Table {table.tableNumber} occupied. Scan disabled.
+                          </p>
+                        </div>
+                      ) : (
+                        <div
+                          onClick={() => setSelectedQR(table)}
+                          className="p-3 bg-white rounded-lg flex flex-col items-center justify-center cursor-pointer shadow-sm relative group/qr"
+                        >
+                          {table.qrCodeUrl ? (
+                            <img src={table.qrCodeUrl} alt={`Table ${table.tableNumber} QR`} className="w-36 h-36 object-contain" />
+                          ) : (
+                            <div className="w-36 h-36 flex items-center justify-center text-neutral-400 text-xs">
+                              No QR Generated
+                            </div>
+                          )}
+                          <span className="mt-1 text-[9px] font-mono font-bold text-neutral-800 uppercase">
+                            Scan to Order • Table {table.tableNumber}
+                          </span>
+                        </div>
+                      )}
                     </div>
-                  </div>
+                  ) : (
+                    <div
+                      onClick={() => setSelectedQR(table)}
+                      className="p-4 bg-white rounded-xl flex items-center justify-center cursor-pointer shadow-md group-hover:scale-102 transition-transform relative"
+                    >
+                      {table.qrCodeUrl ? (
+                        <img src={table.qrCodeUrl} alt={`Table ${table.tableNumber} QR`} className="w-40 h-40 object-contain" />
+                      ) : (
+                        <div className="w-40 h-40 flex items-center justify-center text-neutral-400 text-xs">
+                          No QR Generated
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 rounded-xl flex items-center justify-center transition-opacity text-white font-bold text-xs gap-1">
+                        <span className="material-symbols-outlined text-[20px]">zoom_in</span>
+                        <span>Enlarge</span>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Token & URL Details */}
                   <div className="space-y-1 text-[10px]">

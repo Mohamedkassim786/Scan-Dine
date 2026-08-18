@@ -18,6 +18,7 @@ interface CustomerState {
   removeFromCart: (menuItemId: string) => Promise<void>;
   clearCart: () => void;
   placeOrder: (specialInstructions?: string, paymentMethod?: string, transactionId?: string) => Promise<any>;
+  closeSession: () => Promise<void>;
 }
 
 export const useCustomerStore = create<CustomerState>((set, get) => ({
@@ -38,6 +39,7 @@ export const useCustomerStore = create<CustomerState>((set, get) => ({
         restaurant,
         table,
         session,
+        cart: { items: [], subtotal: 0, tax: 0, total: 0 },
         isLoading: false,
       });
 
@@ -141,6 +143,21 @@ export const useCustomerStore = create<CustomerState>((set, get) => ({
     } catch (err: any) {
       console.error('Error placing order:', err);
       throw err;
+    }
+  },
+
+  closeSession: async () => {
+    const { session, restaurant } = get();
+    if (!session?.token) return;
+
+    try {
+      await api.post('/sessions/close', { sessionToken: session.token });
+      if (restaurant?.slug) {
+        localStorage.removeItem(`scan_dine_session_${restaurant.slug}`);
+      }
+      set({ session: null, cart: { items: [], subtotal: 0, tax: 0, total: 0 } });
+    } catch (err) {
+      console.error('Error closing session:', err);
     }
   },
 }));

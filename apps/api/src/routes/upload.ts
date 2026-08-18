@@ -50,15 +50,12 @@ router.post('/single', upload.single('image'), (req: Request, res: Response, nex
     }
 
     const filename = req.file.filename;
-    const host = req.get('host') || 'localhost:3001';
-    const protocol = req.protocol || 'http';
     const relativeUrl = `/uploads/${filename}`;
-    const fullUrl = `${protocol}://${host}/uploads/${filename}`;
 
     return res.status(201).json({
       success: true,
       filename,
-      url: fullUrl,
+      url: relativeUrl,
       relativeUrl,
       size: req.file.size,
       mimetype: req.file.mimetype,

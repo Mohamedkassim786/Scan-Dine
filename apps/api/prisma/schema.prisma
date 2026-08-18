@@ -87,15 +87,17 @@ model RestaurantTable {
 
 // ─── Customer Session (Anonymous) ────────────────────────────────
 model CustomerSession {
-  id           String          @id @default(uuid())
-  sessionToken String          @unique @default(uuid())
-  restaurantId String
-  tableId      String
-  restaurant   Restaurant      @relation(fields: [restaurantId], references: [id])
-  table        RestaurantTable @relation(fields: [tableId], references: [id])
-  isActive     Boolean         @default(true)
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
+  id              String          @id @default(uuid())
+  sessionToken    String          @unique @default(uuid())
+  restaurantId    String
+  tableId         String
+  restaurant      Restaurant      @relation(fields: [restaurantId], references: [id])
+  table           RestaurantTable @relation(fields: [tableId], references: [id])
+  isActive        Boolean         @default(true)
+  status          String          @default("active") // "active" | "frozen" | "closed"
+  cashierPassCode String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
 
   orders Order[]
   cart   Cart?

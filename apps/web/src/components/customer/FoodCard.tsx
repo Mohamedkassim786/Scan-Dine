@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { MenuItem } from '../../types';
 import { useCustomerStore } from '../../store/useCustomerStore';
+import { formatImageUrl } from '../../utils/image';
 
 interface FoodCardProps {
   item: MenuItem;
@@ -10,9 +11,11 @@ interface FoodCardProps {
 export const FoodCard: React.FC<FoodCardProps> = ({ item, onSelect }) => {
   const { addToCart } = useCustomerStore();
   const [isAdding, setIsAdding] = useState(false);
+  const isAvailable = item.isAvailable !== false;
 
   const handleQuickAdd = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!isAvailable) return;
     setIsAdding(true);
     try {
       await addToCart(item.id, 1);
@@ -26,17 +29,36 @@ export const FoodCard: React.FC<FoodCardProps> = ({ item, onSelect }) => {
   return (
     <div
       onClick={() => onSelect(item)}
-      className="group relative flex flex-col bg-[#1f2020] rounded-xl overflow-hidden border border-[#4f4539]/25 hover:border-[#edbf7b]/40 transition-all duration-300 shadow-md cursor-pointer hover:shadow-xl"
+      className={`group relative flex flex-col rounded-xl overflow-hidden border transition-all duration-300 shadow-md cursor-pointer ${
+        isAvailable
+          ? 'bg-[#1f2020] border-[#4f4539]/25 hover:border-[#edbf7b]/40 hover:shadow-xl'
+          : 'bg-[#181515] border-rose-500/30 opacity-80'
+      }`}
     >
       {/* Food Image */}
       <div className="relative w-full aspect-[4/3] bg-[#121414] overflow-hidden">
         <img
-          src={item.imageUrl}
+          src={formatImageUrl(item.imageUrl)}
           alt={item.name}
-          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+          className={`w-full h-full object-cover transition-transform duration-500 ${
+            isAvailable ? 'group-hover:scale-105' : 'grayscale opacity-60'
+          }`}
           loading="lazy"
+          onError={(e: any) => {
+            e.target.src = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=600&q=80';
+          }}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-[#1f2020] via-transparent to-transparent opacity-80" />
+
+        {/* Unavailable Banner Overlay */}
+        {!isAvailable && (
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex items-center justify-center p-2 z-20">
+            <span className="px-3 py-1.5 rounded-xl bg-rose-950/90 border border-rose-500/60 text-rose-300 text-xs font-bold uppercase tracking-wider shadow-lg flex items-center gap-1.5 animate-pulse">
+              <span className="material-symbols-outlined text-[16px]">block</span>
+              <span>Currently Unavailable</span>
+            </span>
+          </div>
+        )}
 
         {/* Badges */}
         <div className="absolute top-2.5 left-2.5 flex flex-wrap gap-1.5 z-10">
@@ -102,20 +124,26 @@ export const FoodCard: React.FC<FoodCardProps> = ({ item, onSelect }) => {
             )}
           </div>
 
-          <button
-            onClick={handleQuickAdd}
-            disabled={isAdding}
-            className="px-3 py-1.5 rounded-full bg-[#edbf7b]/10 hover:bg-[#edbf7b] text-[#edbf7b] hover:text-[#442b00] border border-[#edbf7b]/30 font-semibold text-xs tracking-wider uppercase transition-all duration-200 flex items-center gap-1 active:scale-95"
-          >
-            {isAdding ? (
-              <span className="material-symbols-outlined text-[14px] animate-spin">sync</span>
-            ) : (
-              <>
-                <span>Add</span>
-                <span className="material-symbols-outlined text-[14px]">add</span>
-              </>
-            )}
-          </button>
+          {isAvailable ? (
+            <button
+              onClick={handleQuickAdd}
+              disabled={isAdding}
+              className="px-3 py-1.5 rounded-full bg-[#edbf7b]/10 hover:bg-[#edbf7b] text-[#edbf7b] hover:text-[#442b00] border border-[#edbf7b]/30 font-semibold text-xs tracking-wider uppercase transition-all duration-200 flex items-center gap-1 active:scale-95"
+            >
+              {isAdding ? (
+                <span className="material-symbols-outlined text-[14px] animate-spin">sync</span>
+              ) : (
+                <>
+                  <span>Add</span>
+                  <span className="material-symbols-outlined text-[14px]">add</span>
+                </>
+              )}
+            </button>
+          ) : (
+            <span className="px-2.5 py-1 rounded-full bg-rose-950/50 text-rose-400 border border-rose-500/30 text-[10px] font-bold uppercase tracking-wider">
+              Unavailable
+            </span>
+          )}
         </div>
       </div>
     </div>

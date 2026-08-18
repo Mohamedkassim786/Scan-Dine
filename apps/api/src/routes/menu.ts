@@ -1,9 +1,29 @@
 import { Router, Response, NextFunction } from 'express';
+import path from 'path';
+import fs from 'fs';
 import { prisma } from '../index';
-import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth';
+import { authenticate, requireAdmin, requireChef, AuthRequest } from '../middleware/auth';
 import { logAudit } from '../utils/audit';
 
 const router = Router();
+
+// Helper to safely delete previous locally uploaded image file from disk
+const deleteLocalUploadFile = (imageUrl: string | null | undefined) => {
+  if (!imageUrl) return;
+  try {
+    if (imageUrl.includes('/uploads/')) {
+      const filename = imageUrl.split('/uploads/')[1]?.split('?')[0];
+      if (filename) {
+        const filePath = path.join(process.cwd(), 'uploads', filename);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Failed to delete old upload file:', err);
+  }
+};
 
 // GET /api/menu?restaurantId=xxx&categoryId=xxx (public)
 router.get('/', async (req, res: Response, next: NextFunction) => {
@@ -176,6 +196,12 @@ router.put('/:id', authenticate, requireAdmin, async (req: AuthRequest, res: Res
       ingredients, allergens, nutrition, categoryId,
     } = req.body;
 
+    // Fetch existing item to check if imageUrl has changed
+    const existing = await prisma.menuItem.findUnique({ where: { id } });
+    if (existing && existing.imageUrl && imageUrl && existing.imageUrl !== imageUrl) {
+      deleteLocalUploadFile(existing.imageUrl);
+    }
+
     const item = await prisma.menuItem.update({
       where: { id },
       data: {
@@ -211,6 +237,7 @@ router.delete('/:id', authenticate, requireAdmin, async (req: AuthRequest, res: 
   try {
     const id = req.params.id as string;
     const item = await prisma.menuItem.delete({ where: { id } });
+    deleteLocalUploadFile(item.imageUrl);
 
     await logAudit({
       action: 'FOOD_DELETED',
@@ -226,25 +253,50 @@ router.delete('/:id', authenticate, requireAdmin, async (req: AuthRequest, res: 
   } catch (error) { next(error); }
 });
 
-// PATCH /api/menu/:id/availability (admin)
-router.patch('/:id/availability', authenticate, requireAdmin, async (req: AuthRequest, res: Response, next: NextFunction) => {
+// PATCH /api/menu/:id/availability (chef / admin)
+router.patch('/:id/availability', authenticate, requireChef, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const id = req.params.id as string;
     const { isAvailable } = req.body;
+
+    const previousItem = await prisma.menuItem.findUnique({ where: { id } });
+    if (!previousItem) {
+      return res.status(404).json({ error: 'Menu item not found' });
+    }
+
+    const previousStatus = previousItem.isAvailable ? 'Available' : 'Unavailable';
+    const newStatus = isAvailable ? 'Available' : 'Unavailable';
+
     const item = await prisma.menuItem.update({
       where: { id },
       data: { isAvailable },
+      include: { category: { select: { id: true, name: true } } },
     });
 
     await logAudit({
       action: isAvailable ? 'FOOD_ACTIVATED' : 'FOOD_86_DEACTIVATED',
       entity: 'MenuItem',
       entityId: item.id,
-      details: `Marked "${item.name}" as ${isAvailable ? 'Available' : 'Unavailable (86)'}`,
+      details: `${item.name}: ${previousStatus} → ${newStatus} (Changed by ${req.user?.role || 'Staff'} ${req.user?.name || ''})`,
       userId: req.user?.id,
       userName: req.user?.name,
       restaurantId: item.restaurantId,
     });
+
+    // Broadcast Socket.IO event for real-time customer and staff menu updates
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`restaurant-${item.restaurantId}`).emit('menu-availability-changed', {
+        menuItemId: item.id,
+        isAvailable: item.isAvailable,
+        menuItem: item,
+      });
+      io.emit('menu-availability-changed', {
+        menuItemId: item.id,
+        isAvailable: item.isAvailable,
+        menuItem: item,
+      });
+    }
 
     return res.json(item);
   } catch (error) { next(error); }

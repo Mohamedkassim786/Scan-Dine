@@ -16,7 +16,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
       where: { sessionId: session.id },
       include: {
         items: {
-          include: { menuItem: { select: { id: true, name: true, price: true, imageUrl: true } } },
+          include: { menuItem: { select: { id: true, name: true, price: true, imageUrl: true, isAvailable: true } } },
         },
       },
     });
@@ -35,6 +35,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
         name: item.menuItem.name,
         price: item.menuItem.price,
         imageUrl: item.menuItem.imageUrl,
+        isAvailable: item.menuItem.isAvailable,
         quantity: item.quantity,
         specialInstructions: item.specialInstructions,
         itemTotal: item.menuItem.price * item.quantity,
@@ -54,6 +55,18 @@ router.post('/add', async (req: Request, res: Response, next: NextFunction) => {
 
     const session = await prisma.customerSession.findUnique({ where: { sessionToken } });
     if (!session) return res.status(404).json({ error: 'Invalid session' });
+
+    // Validate menu item availability & restaurant
+    const menuItem = await prisma.menuItem.findUnique({ where: { id: menuItemId } });
+    if (!menuItem) {
+      return res.status(404).json({ error: 'Dish not found' });
+    }
+    if (menuItem.restaurantId !== session.restaurantId) {
+      return res.status(400).json({ error: 'Item does not belong to this restaurant' });
+    }
+    if (!menuItem.isAvailable) {
+      return res.status(400).json({ error: `${menuItem.name} is currently unavailable and cannot be added.` });
+    }
 
     // Get or create cart
     let cart = await prisma.cart.findUnique({ where: { sessionId: session.id } });

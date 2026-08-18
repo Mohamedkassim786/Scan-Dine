@@ -29,6 +29,8 @@ import reportRoutes from './routes/reports';
 import auditLogRoutes from './routes/auditLogs';
 import profileRoutes from './routes/profile';
 import uploadRoutes from './routes/upload';
+import sessionRoutes from './routes/sessions';
+import esp32Routes from './routes/esp32';
 import { setupSocket } from './socket';
 
 export const prisma = new PrismaClient();
@@ -67,6 +69,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/restaurants', restaurantRoutes);
 app.use('/api/tables', tableRoutes);
 app.use('/api/qr', qrRoutes);
+app.use('/api/sessions', sessionRoutes);
+app.use('/api/esp32', esp32Routes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/menu', menuRoutes);
 app.use('/api/addons', addonRoutes);
@@ -82,6 +86,59 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/audit-logs', auditLogRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/upload', uploadRoutes);
+
+// Background job: Auto-clean abandoned dining sessions (every 5 minutes)
+setInterval(async () => {
+  try {
+    const thirtyMinsAgo = new Date(Date.now() - 30 * 60 * 1000);
+    
+    // Find active sessions older than 30 mins
+    const activeSessions = await prisma.customerSession.findMany({
+      where: {
+        isActive: true,
+        updatedAt: { lte: thirtyMinsAgo },
+      },
+      include: {
+        orders: { select: { status: true, paymentStatus: true } },
+        table: true,
+        restaurant: true,
+      },
+    });
+
+    for (const session of activeSessions) {
+      // Auto-close if all orders are delivered or cancelled
+      const allDone = session.orders.length > 0 && session.orders.every(
+        (o) => o.status === 'delivered' || o.status === 'cancelled'
+      );
+
+      if (allDone) {
+        await prisma.customerSession.update({
+          where: { id: session.id },
+          data: { isActive: false, status: 'closed' } as any,
+        });
+
+        // Set table to available
+        await prisma.restaurantTable.update({
+          where: { id: session.tableId },
+          data: { status: 'available' },
+        });
+
+        const payload = {
+          tableId: session.tableId,
+          tableNumber: session.table.tableNumber,
+          sessionId: session.id,
+        };
+
+        io.to(`restaurant-${session.restaurantId}`).emit('session-closed', payload);
+        io.to(`restaurant-${session.restaurantId}`).emit('table-updated', payload);
+        io.emit('session-closed', payload);
+        io.emit('table-updated', payload);
+      }
+    }
+  } catch (err) {
+    console.error('Error in session auto-cleanup background job:', err);
+  }
+}, 5 * 60 * 1000);
 
 // Health check
 app.get('/api/health', (_req, res) => {

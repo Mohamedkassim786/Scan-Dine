@@ -24,8 +24,9 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
       include: { table: true },
     });
     if (!session) return res.status(404).json({ error: 'Invalid session' });
-
-    // Validate table is active
+    if (!session.isActive || (session as any).status === 'frozen' || (session as any).status === 'closed') {
+      return res.status(400).json({ error: 'Your dining session has been closed for payment. No more orders can be placed.' });
+    }
     if (!session.table.isActive || session.table.isDeleted) {
       return res.status(400).json({ error: 'Table is no longer active' });
     }
@@ -39,8 +40,36 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
       return res.status(400).json({ error: 'Cart is empty' });
     }
 
-    // Calculate totals
-    const subtotal = cart.items.reduce((sum: number, item: any) => sum + item.menuItem.price * item.quantity, 0);
+    // Backend validation of every cart item against latest DB state
+    const validatedItems: Array<{ menuItemId: string; name: string; price: number; quantity: number; specialInstructions: string }> = [];
+    let subtotal = 0;
+
+    for (const item of cart.items) {
+      const latestItem = await prisma.menuItem.findUnique({
+        where: { id: item.menuItemId },
+      });
+
+      if (!latestItem || !latestItem.isAvailable || latestItem.restaurantId !== session.restaurantId) {
+        // Remove unavailable item from cart
+        await prisma.cartItem.delete({ where: { id: item.id } });
+        const dishName = latestItem?.name || 'An item in your cart';
+        return res.status(400).json({
+          error: `${dishName} is currently unavailable and has been removed from your order.`,
+          unavailableItem: dishName,
+        });
+      }
+
+      subtotal += latestItem.price * item.quantity;
+      validatedItems.push({
+        menuItemId: latestItem.id,
+        name: latestItem.name,
+        price: latestItem.price,
+        quantity: item.quantity,
+        specialInstructions: item.specialInstructions || '',
+      });
+    }
+
+    // Calculate totals from DB prices
     const taxAmount = Math.round(subtotal * 0.05 * 100) / 100;
     const totalAmount = Math.round((subtotal + taxAmount) * 100) / 100;
 
@@ -151,15 +180,20 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     if (tokenStr) {
       const session = await prisma.customerSession.findUnique({ where: { sessionToken: tokenStr } });
       if (session) {
-        where.OR = [
-          { sessionId: session.id },
-          { tableId: session.tableId, createdAt: { gte: new Date(Date.now() - 12 * 60 * 60 * 1000) } },
-        ];
+        where.sessionId = session.id;
       } else {
         const table = await prisma.restaurantTable.findUnique({ where: { qrToken: tokenStr } });
         if (table) {
-          where.tableId = table.id;
-          where.createdAt = { gte: new Date(Date.now() - 12 * 60 * 60 * 1000) };
+          // Find current active session on this table
+          const activeSession = await prisma.customerSession.findFirst({
+            where: { tableId: table.id, isActive: true },
+            orderBy: { createdAt: 'desc' },
+          });
+          if (activeSession) {
+            where.sessionId = activeSession.id;
+          } else {
+            return res.json([]);
+          }
         } else {
           return res.status(404).json({ error: 'Invalid session or table token' });
         }

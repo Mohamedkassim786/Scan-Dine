@@ -8,3 +8,6 @@ Thumbs.db
 *.log
 .vite/
 stitch-designs/
+apps/api/uploads/*
+!apps/api/uploads/.gitkeep
+

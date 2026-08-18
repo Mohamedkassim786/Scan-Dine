@@ -1,49 +1,55 @@
-# 🍽️ Scan & Dine — Smart Luxury Dining System
+# 🍽️ Scan & Dine — Smart Luxury Dining & ESP32 Hardware System
 
-A modern, full-stack, real-time QR-based restaurant dining and hospitality platform. Designed with dark luxury aesthetics, real-time order synchronization, digital receipts with direct image download and thermal printing, concierge assistance, and a comprehensive 18-module Admin Control Center.
+A modern, full-stack, real-time QR-based restaurant dining and hospitality platform. Features **ESP32 Smart Table Display microcontrollers**, **Cashier Pass cash payments**, **instant UPI online checkout**, **real-time WebSocket kitchen KDS**, **PNG digital receipts**, and an **18-module Admin Control Center**.
 
 ---
 
 ## 🌟 Key Highlights & Core Features
 
-### 📱 1. Customer Dining Experience (Zero-Login / Zero-App)
+### 📡 1. ESP32 Smart Non-Touch Table Display System
+* **IoT Hardware Display Endpoint**: `GET /api/esp32/table-status/:tableId` designed for ESP32 microcontrollers over Wi-Fi.
+* **3 Screen Display States**:
+  * 🟢 **Table Available**: Displays dynamic QR Code + *"Scan to Order"*.
+  * 🟡 **Session Active (Dining)**: **Hides QR Code** for security & privacy while guests are dining + shows *"Table 5 · Dining in Progress"*.
+  * 🔴 **Cashier Pass / Session Ended**: Automatically displays **NEW QR Code** for the next guest.
+* **Admin Live Hardware Simulator**: Preview and simulate ESP32 table displays directly inside the Admin QR Code Hub in real-time.
+
+---
+
+### 💳 2. Payment & Cashier Pass Flows
+* **UPI Online Checkout**: Instant payment verification via Google Pay / PhonePe / Paytm. Auto-closes session and regenerates table QR code.
+* **Cashier Pass Flow**:
+  * Selecting *"Pay Cash at Counter"* instantly generates a **Cashier Pass** (e.g. **#A7F3**) with the total bill on the customer's phone screen.
+  * **Zero Table Downtime**: The table QR code regenerates immediately so incoming guests can sit down right away, while outgoing guests pay cash at the cashier counter.
+  * Live WebSocket updates auto-refresh the customer screen once the cashier marks the bill as paid.
+* **Strict Session Isolation**: Prevents old bills from leaking to new guests when scanning the table QR.
+
+---
+
+### 📱 3. Customer Dining Experience (Zero-Login / Zero-App)
 * **Instant QR Dining**: Scan table QR token (`/r/:slug/t/:token`) to instantly open the table session without sign-up or app downloads.
 * **Gastronomy Menu**: Explore categorized menus with dietary tags (Veg, Non-Veg, Vegan), spice levels, allergens, chef picks, and custom notes.
-* **Persistent Multi-Order Tracking**: Place multiple rounds of orders (Starters, Mains, Desserts). Returning to the menu or cart retains all previous orders in the table session.
-* **Instant Digital Payment Modes**:
-  * **UPI** (Google Pay, PhonePe, Paytm) with custom UPI IDs and auto-generated transaction references.
-  * **Credit / Debit Cards** (Visa, Mastercard, RuPay).
-  * **Cash at Counter / Running Table Tab**.
-* **Consolidated Master Bill**:
-  * When dining with cash or adding multiple rounds of dishes, orders combine into **one single consolidated master bill**.
-  * Download bill as a **high-resolution PNG image** directly to device gallery (**Zero PDF requirement**).
+* **Multi-Round Ordering**: Place multiple order rounds (Starters, Mains, Desserts). Orders combine into **one single consolidated master bill**.
+* **High-Res PNG Receipt Download**: Direct gallery PNG download via Blob URLs (**Zero PDF requirement**).
 * **Table Service Concierge**: 1-click calls for *"Call Server to Table"*, *"Request Water / Ice"*, *"Extra Cutlery"*, or *"Request Final Bill"*.
-* **Dine AI Gastronomy Concierge**: Interactive AI assistant for wine pairings, flavor notes, and tasting menu recommendations.
 
 ---
 
-### 👨‍🍳 2. Kitchen Display System (KDS)
+### 👨‍🍳 4. Kitchen Display System (KDS)
 * **Real-time Kanban Ticket Flow**: Live columns (`New Orders` → `Accepted` → `In Preparation` → `Ready on Pass` → `Served to Table`).
-* **Web Audio API Synth Chimes**: Automatic, crystal-clear 3-note culinary chime on new tickets and 2-tone concierge bell on table assistance calls (no external audio dependencies).
+* **Web Audio API Synth Chimes**: Automatic, crystal-clear 3-note culinary chime on new tickets and 2-tone concierge bell on table calls.
 * **Active Table Assistance Calls Strip**: Top-level alert bar for active server calls with 1-click dismissal.
-* **Live Timers & Allergen Flags**: Visual badges for allergies, special kitchen instructions, and elapsed cooking timers.
 
 ---
 
-### 👑 3. Admin Control Center (18 Comprehensive Modules)
-1. **Dashboard & Executive Analytics**: Real-time revenue, order volume, live occupancy, AOV, popular dishes, and hourly peak heatmaps.
-2. **Live Floor & Table Map**: Real-time table states (`Available`, `Occupied`, `Billing`, `Cleaning`), capacity badges, and instant table release.
-3. **QR Code Studio & Printing**: Generate, download, and print luxury table QR cards with cryptographic tokens.
+### 👑 5. Admin Control Center (18 Comprehensive Modules)
+1. **Live Floor & Table Map**: Real-time table states (`Available`, `Occupied`, `Billing`, `Cleaning`), capacity badges, and instant table release.
+2. **Table QR & ESP32 Hub**: Live ESP32 simulator, high-res vector downloads, and token regeneration.
+3. **Dashboard & Executive Analytics**: Real-time revenue, order volume, live occupancy, AOV, popular dishes, and hourly peak heatmaps.
 4. **Interactive Menu Engineering**: Categories, dishes, images, price updates, calorie counters, and 1-click `86 / Availability` toggles.
-5. **Real-time Orders Management**: Live ticket stream, status controls, and ticket reprint.
-6. **Billing, Payments & Consolidated Settle**: View all payments, filter by UPI/Card/Cash, 1-click table bill settlement.
-7. **Chef & Kitchen Staff Accounts**: Manage chef credentials, shift statuses, and password resets.
-8. **Customer Feedback & Ratings**: Star ratings, diner reviews, and service sentiment.
-9. **Promotions, Coupons & Discounts**: Percentage/flat discount codes, expiry dates, and min-spend constraints.
-10. **Inventory & Stock Management**: Real-time stock levels, low-stock threshold alerts, and supplier tracking.
-11. **Comprehensive Audit Logs**: Complete trail of menu changes, price updates, user logins, and table operations.
-12. **Print System**: Native browser print supporting **80mm Thermal**, **58mm Thermal**, and **A4 Standard** receipts.
-13. **Role-Based Access Control**: Strict JWT token authentication and role verification (`admin`, `chef`, `staff`).
+5. **Billing, Payments & Cashier Pass Settle**: View all payments, filter by UPI/Card/Cash, 1-click table bill settlement.
+6. **Chef & Kitchen Staff Accounts**: Manage chef credentials, shift statuses, and password resets.
+7. **Comprehensive Audit Logs**: Complete trail of menu changes, price updates, user logins, and table operations.
 
 ---
 
@@ -61,7 +67,7 @@ Scan-Dine/
 │   │   │   └── utils/          # Web Audio synthesizer chime generator
 │   └── api/                    # Node.js + Express + TypeScript + Prisma + Socket.IO
 │       ├── src/
-│       │   ├── routes/         # Orders, Menu, QR, Tables, Payments, Staff, Analytics
+│       │   ├── routes/         # ESP32, Sessions, Orders, Menu, QR, Tables, Payments, Staff
 │       │   ├── middleware/     # Role-based JWT & error handlers
 │       │   ├── socket/         # Real-time WebSocket event dispatching
 │       │   └── utils/          # Audit logging
@@ -99,7 +105,7 @@ npx tsx prisma/seed.ts
 # Start backend dev server
 npm run dev
 ```
-> The API server runs at **`http://localhost:3001`** with WebSocket support.
+> The API server runs at **`http://localhost:3001`** with WebSocket and ESP32 status support.
 
 ---
 
@@ -125,30 +131,27 @@ npm run dev
 
 ### 1. 📱 Customer Table Experience
 * **Direct Table Link**: [`http://localhost:5173/r/aurelian/t/tbl-token-5b674914-e934-4d35-aa7e-828ad95ea0a1/menu`](http://localhost:5173/r/aurelian/t/tbl-token-5b674914-e934-4d35-aa7e-828ad95ea0a1/menu)
-* **Features**: Zero login, live menu, cart, UPI/Card/Cash checkout, real-time ticket tracker, session orders, and PNG receipt download.
+* **Features**: Zero login, live menu, cart, UPI/Cashier Pass checkout, real-time ticket tracker, session orders, and PNG receipt download.
 
 ---
 
-### 2. 👨‍🍳 Chef Kitchen Terminal (KDS)
+### 2. 📡 ESP32 Hardware Status Endpoint
+* **URL**: [`http://localhost:3001/api/esp32/table-status/token/tbl-token-5b674914-e934-4d35-aa7e-828ad95ea0a1`](http://localhost:3001/api/esp32/table-status/token/tbl-token-5b674914-e934-4d35-aa7e-828ad95ea0a1)
+* **Returns**: JSON object for ESP32 microcontroller screen rendering (`{ showQR: boolean, status: "available" | "occupied", qrCodeUrl }`).
+
+---
+
+### 3. 👨‍🍳 Chef Kitchen Terminal (KDS)
 * **URL**: [`http://localhost:5173/chef/login`](http://localhost:5173/chef/login)
 * **Email**: `chef.marcus@aurelian.com`
 * **Password**: `password123`
 
 ---
 
-### 3. 👑 Admin Estate Portal
+### 4. 👑 Admin Estate Portal
 * **URL**: [`http://localhost:5173/admin/login`](http://localhost:5173/admin/login)
 * **Email**: `admin@aurelian.com`
 * **Password**: `password123`
-
----
-
-## 🛡️ Security & Business Logic Guarantees
-1. **Zero Customer Friction**: Diners never need to download an application or create accounts.
-2. **Cryptographic QR Validation**: Every table has a unique cryptographic token validated on the backend.
-3. **Accurate Payment Classification**: UPI, Card, and Cash transactions are recorded with unique reference codes.
-4. **Single Master Bill Consolidation**: Multiple rounds of cash/running orders automatically combine into one receipt.
-5. **Role-Protected Operations**: Chef and Admin APIs are strictly enforced via JWT authentication.
 
 ---
 

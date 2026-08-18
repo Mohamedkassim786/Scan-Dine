@@ -2,9 +2,12 @@ import React, { useEffect, useState } from 'react';
 import api from '../../services/api';
 import { AdminSidebar } from '../../components/admin/AdminSidebar';
 import { AdminHeader } from '../../components/admin/AdminHeader';
+import { getSocket } from '../../services/socket';
+import { useAuthStore } from '../../store/useAuthStore';
 import { Table } from '../../types';
 
 export const AdminTablesPage: React.FC = () => {
+  const { user } = useAuthStore();
   const [tables, setTables] = useState<Table[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTable, setEditingTable] = useState<Table | null>(null);
@@ -18,7 +21,33 @@ export const AdminTablesPage: React.FC = () => {
 
   useEffect(() => {
     fetchTables();
-  }, [showDeleted]);
+
+    const socket = getSocket();
+    if (user?.restaurantId) {
+      socket.emit('join-admin', user.restaurantId);
+    }
+
+    const handleUpdate = () => {
+      fetchTables();
+    };
+
+    socket.on('session-closed', handleUpdate);
+    socket.on('table-updated', handleUpdate);
+    socket.on('qr-updated', handleUpdate);
+    socket.on('order-status-update', handleUpdate);
+    socket.on('new-order', handleUpdate);
+
+    const interval = setInterval(fetchTables, 3000);
+
+    return () => {
+      socket.off('session-closed', handleUpdate);
+      socket.off('table-updated', handleUpdate);
+      socket.off('qr-updated', handleUpdate);
+      socket.off('order-status-update', handleUpdate);
+      socket.off('new-order', handleUpdate);
+      clearInterval(interval);
+    };
+  }, [showDeleted, user]);
 
   const fetchTables = async () => {
     try {

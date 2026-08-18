@@ -39,8 +39,9 @@ router.get('/:token', async (req: Request, res: Response, next: NextFunction) =>
         tableId: table.id,
         restaurantId: table.restaurantId,
         isActive: true,
+        status: 'active',
         createdAt: { gte: new Date(Date.now() - 4 * 60 * 60 * 1000) },
-      },
+      } as any,
       orderBy: { createdAt: 'desc' },
     });
 

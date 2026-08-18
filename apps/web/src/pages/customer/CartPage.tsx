@@ -7,14 +7,17 @@ import { CustomerHeader } from '../../components/customer/CustomerHeader';
 import { CustomerBottomNav } from '../../components/customer/CustomerBottomNav';
 import { DigitalReceipt } from '../../components/common/DigitalReceipt';
 import { Order } from '../../types';
+import { formatImageUrl } from '../../utils/image';
 
 export const CartPage: React.FC = () => {
   const { slug, token } = useParams<{ slug: string; token: string }>();
   const navigate = useNavigate();
-  const { cart, table, session, updateCartItem, removeFromCart, placeOrder } = useCustomerStore();
+  const { cart, table, session, fetchCart, updateCartItem, removeFromCart, placeOrder } = useCustomerStore();
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [sessionOrders, setSessionOrders] = useState<Order[]>([]);
   const [activeReceiptOrder, setActiveReceiptOrder] = useState<Order | null>(null);
+
+  const hasUnavailableItems = cart.items.some((item: any) => item.isAvailable === false);
   
   // Payment Modal States
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -28,20 +31,31 @@ export const CartPage: React.FC = () => {
 
   useEffect(() => {
     fetchSessionOrders();
+    fetchCart();
 
     const socket = getSocket();
     const handleUpdate = () => {
       fetchSessionOrders();
+      fetchCart();
+    };
+
+    const handleAvailabilityChange = () => {
+      fetchCart();
     };
 
     socket.on('new-order', handleUpdate);
     socket.on('order-status-update', handleUpdate);
+    socket.on('menu-availability-changed', handleAvailabilityChange);
 
-    const interval = setInterval(fetchSessionOrders, 4000);
+    const interval = setInterval(() => {
+      fetchSessionOrders();
+      fetchCart();
+    }, 4000);
 
     return () => {
       socket.off('new-order', handleUpdate);
       socket.off('order-status-update', handleUpdate);
+      socket.off('menu-availability-changed', handleAvailabilityChange);
       clearInterval(interval);
     };
   }, [token, session?.token]);
@@ -193,62 +207,104 @@ export const CartPage: React.FC = () => {
           </div>
         ) : (
           <div className="space-y-4">
+            {hasUnavailableItems && (
+              <div className="p-3.5 rounded-xl bg-rose-950/70 border border-rose-500/50 text-rose-200 text-xs flex items-center justify-between gap-3 shadow-lg animate-pulse">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-rose-400 text-[20px]">warning</span>
+                  <div>
+                    <p className="font-bold">⚠️ Some items in your order are currently unavailable.</p>
+                    <p className="text-[11px] text-rose-300/80">Please remove unavailable items to proceed to checkout.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center justify-between">
               <h3 className="font-serif-heading text-lg font-bold text-[#e3e2e2]">New Dishes to Order</h3>
               <span className="text-xs text-[#d2c4b4]/60">{cart.items.length} Items</span>
             </div>
 
             <div className="space-y-3">
-              {cart.items.map((item) => (
-                <div
-                  key={item.id}
-                  className="p-3.5 rounded-xl bg-[#1f2020] border border-[#4f4539]/25 flex items-center gap-3.5 shadow-sm"
-                >
-                  <img
-                    src={item.imageUrl}
-                    alt={item.name}
-                    className="w-16 h-16 rounded-lg object-cover bg-[#121414]"
-                  />
+              {cart.items.map((item: any) => {
+                const isItemAvailable = item.isAvailable !== false;
 
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-serif-heading font-semibold text-sm text-[#e3e2e2] truncate">
-                      {item.name}
-                    </h4>
-                    <p className="text-[#edbf7b] font-bold text-xs mt-0.5">₹{item.price.toFixed(2)}</p>
-                    {item.specialInstructions && (
-                      <p className="text-[10px] text-[#d2c4b4]/60 italic truncate mt-0.5">
-                        {item.specialInstructions}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Quantity Stepper & Remove */}
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center bg-[#121414] rounded-full border border-[#4f4539]/40 h-8 px-1">
-                      <button
-                        onClick={() => updateCartItem(item.menuItemId, item.quantity - 1)}
-                        className="w-6 h-6 rounded-full flex items-center justify-center text-[#d2c4b4] hover:text-[#e3e2e2]"
-                      >
-                        <span className="material-symbols-outlined text-[14px]">remove</span>
-                      </button>
-                      <span className="w-5 text-center font-bold text-xs text-[#e3e2e2]">{item.quantity}</span>
-                      <button
-                        onClick={() => updateCartItem(item.menuItemId, item.quantity + 1)}
-                        className="w-6 h-6 rounded-full flex items-center justify-center text-[#d2c4b4] hover:text-[#e3e2e2]"
-                      >
-                        <span className="material-symbols-outlined text-[14px]">add</span>
-                      </button>
+                return (
+                  <div
+                    key={item.id}
+                    className={`p-3.5 rounded-xl flex items-center gap-3.5 shadow-sm border transition-all ${
+                      isItemAvailable
+                        ? 'bg-[#1f2020] border-[#4f4539]/25'
+                        : 'bg-[#181414] border-rose-500/50 text-rose-100'
+                    }`}
+                  >
+                    <div className="relative">
+                      <img
+                        src={formatImageUrl(item.imageUrl)}
+                        alt={item.name}
+                        className={`w-16 h-16 rounded-lg object-cover bg-[#121414] ${
+                          !isItemAvailable ? 'grayscale opacity-60' : ''
+                        }`}
+                        onError={(e: any) => {
+                          e.target.src = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=600&q=80';
+                        }}
+                      />
+                      {!isItemAvailable && (
+                        <span className="absolute inset-0 bg-black/60 rounded-lg flex items-center justify-center text-[9px] font-bold text-rose-300 uppercase tracking-tighter text-center p-0.5">
+                          Unavailable
+                        </span>
+                      )}
                     </div>
 
-                    <button
-                      onClick={() => removeFromCart(item.menuItemId)}
-                      className="text-[#9b8f80] hover:text-rose-400 p-1"
-                    >
-                      <span className="material-symbols-outlined text-[18px]">delete</span>
-                    </button>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-serif-heading font-semibold text-sm text-[#e3e2e2] truncate">
+                          {item.name}
+                        </h4>
+                        {!isItemAvailable && (
+                          <span className="px-2 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-500/40 text-[9px] font-bold uppercase shrink-0">
+                            Unavailable
+                          </span>
+                        )}
+                      </div>
+
+                      <p className="text-[#edbf7b] font-bold text-xs mt-0.5">₹{item.price.toFixed(2)}</p>
+                      {item.specialInstructions && (
+                        <p className="text-[10px] text-[#d2c4b4]/60 italic truncate mt-0.5">
+                          {item.specialInstructions}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Quantity Stepper & Remove */}
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center bg-[#121414] rounded-full border border-[#4f4539]/40 h-8 px-1">
+                        <button
+                          onClick={() => updateCartItem(item.menuItemId, item.quantity - 1)}
+                          className="w-6 h-6 rounded-full flex items-center justify-center text-[#d2c4b4] hover:text-[#e3e2e2]"
+                        >
+                          <span className="material-symbols-outlined text-[14px]">remove</span>
+                        </button>
+                        <span className="w-5 text-center font-bold text-xs text-[#e3e2e2]">{item.quantity}</span>
+                        <button
+                          onClick={() => updateCartItem(item.menuItemId, item.quantity + 1)}
+                          disabled={!isItemAvailable}
+                          className="w-6 h-6 rounded-full flex items-center justify-center text-[#d2c4b4] hover:text-[#e3e2e2] disabled:opacity-30"
+                        >
+                          <span className="material-symbols-outlined text-[14px]">add</span>
+                        </button>
+                      </div>
+
+                      <button
+                        onClick={() => removeFromCart(item.menuItemId)}
+                        className="text-[#9b8f80] hover:text-rose-400 p-1"
+                        title="Remove item"
+                      >
+                        <span className="material-symbols-outlined text-[18px]">delete</span>
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Special Instructions */}
@@ -311,10 +367,24 @@ export const CartPage: React.FC = () => {
 
               <button
                 onClick={handleInitiateCheckout}
-                className="flex-1 sm:flex-initial px-6 h-12 rounded-xl bg-[#edbf7b] hover:bg-[#ffddb0] text-[#442b00] font-bold text-xs uppercase tracking-widest transition-all duration-200 shadow-xl flex items-center justify-center gap-2 active:scale-98"
+                disabled={hasUnavailableItems}
+                className={`flex-1 sm:flex-initial px-6 h-12 rounded-xl font-bold text-xs uppercase tracking-widest transition-all duration-200 shadow-xl flex items-center justify-center gap-2 ${
+                  hasUnavailableItems
+                    ? 'bg-rose-950/70 border border-rose-500/40 text-rose-300 cursor-not-allowed'
+                    : 'bg-[#edbf7b] hover:bg-[#ffddb0] text-[#442b00] active:scale-98'
+                }`}
               >
-                <span>Proceed to Pay</span>
-                <span className="material-symbols-outlined text-[18px]">payments</span>
+                {hasUnavailableItems ? (
+                  <>
+                    <span className="material-symbols-outlined text-[18px]">block</span>
+                    <span>Remove Unavailable Items</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Proceed to Pay</span>
+                    <span className="material-symbols-outlined text-[18px]">payments</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
